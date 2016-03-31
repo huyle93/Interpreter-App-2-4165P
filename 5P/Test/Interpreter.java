@@ -1,0 +1,367 @@
+/**
+ * Interpreter.java - parses string input representing an infix arithmetic
+ *                 expression into tokens, and builds an expression tree.
+ *                 The expression can use the operators =, +, -, *, /, %.
+ *                 and can contain arbitrarily nested parentheses.
+ *                 The = operator is assignment and must be absolutely lowest
+ *                 precedence.
+ * March 2013
+ * rdb
+ */
+import javax.swing.*;
+import java.util.*;
+import java.io.*;
+
+public class Interpreter 
+{
+   //----------------------  class variables  ------------------------
+
+   //---------------------- instance variables ----------------------
+   private boolean      _printTree = true;  // if true print tree after each
+                                           //    expression tree is built 
+   float _Value;
+   ArrayList<String> _Operator;
+   Scanner _Scanner;
+
+   //----------- constants
+   
+       private Stack<String> _OperatorStack;
+       private Stack<TreeNode> _RandomStack;
+       OperatorNode _OperatorNode;
+       private TreeNode _TreeRoot;
+       public SymbolTable _SymbolTable;
+       
+   //--------------------------- constructor -----------------------
+   /**
+    * If there is a command line argument use it as an input file.
+    * otherwise invoke an interactive dialog.
+    */
+   public Interpreter( String[] args ) 
+   {  
+       
+       _SymbolTable = SymbolTable.instance();
+       _OperatorStack = new Stack<String>();
+       _RandomStack = new Stack<TreeNode>();
+    
+       if ( args.length > 0 )
+           processFile( args[ 0 ] );
+       else
+           interactive();      
+   }
+   //--------------------- processFile -----------------------------
+   /**
+    * Given a String containing a file name, open the file and read it.
+    * Each line should represent an expression to be parsed.
+    */
+   public void processFile( String fileName )
+   {
+       File _File = null;
+       Scanner _Scanner = null;
+       
+       try 
+       {
+           _File = new File (fileName);
+           _Scanner = new Scanner(_File);
+       }
+       
+       catch (Exception ex)
+       {
+           System.err.println( "FILE NOT FOUND: " + fileName );
+           return;
+       }
+     
+      while (_Scanner.hasNextLine()) 
+      {
+        String scanner = _Scanner.nextLine();
+        
+        if (scanner.startsWith("#"))
+          System.out.println(scanner);
+                 
+        else if (scanner.startsWith("@")) 
+        {
+          if (scanner.startsWith("@print")) 
+            print(scanner);
+                     
+          else if (scanner.startsWith("@lookup"))           
+            lookUp(scanner);
+        } 
+        
+        else 
+        {
+            String processedline = processLine(scanner);
+            System.out.println( processLine(scanner) );
+        }
+      }
+    }      
+  
+  private void print(String donotneedthisline) 
+  {
+    System.out.println(donotneedthisline);
+  }
+  
+  private void lookUp(String lokkupthisline) 
+  {
+    System.out.println(lokkupthisline);
+  }
+
+  private void printTree( TreeNode _TreeNode, int _Depth )
+  {
+    for( int i = 0; i < _Depth; i++ )
+    {
+      System.out.print( "      " );
+    }
+    if( _TreeNode instanceof VariableNode || _TreeNode instanceof NumberNode )
+    {      
+      System.out.println( _TreeNode.cur );
+    }
+    else
+    {     
+      System.out.println( _TreeNode.cur );
+      printTree( ( (OperatorNode)_TreeNode).right, _Depth + 1 );
+      printTree( ( (OperatorNode)_TreeNode).left, _Depth + 1 );     
+    }
+  }
+       
+   //--------------------- processLine -----------------------------
+   /**
+    * Parse each input line -- it shouldn't matter whether it comes from
+    * the file or the popup dialog box. It might be convenient to return
+    * return something to the caller in the form of a String that can
+    * be printed or displayed.
+    */
+   public String processLine( String line )
+   {
+      
+    String news = "";
+    String _String = "";
+    
+    _Operator = new ArrayList<String>();
+    
+    _Operator.add( "*" );
+    _Operator.add( "/" );
+    _Operator.add( "%" );
+    _Operator.add( "=" );
+    _Operator.add( "-" );
+    _Operator.add( "+" );
+    
+    StringTokenizer _St = new StringTokenizer( line.trim() );    
+  
+    while( _St.hasMoreTokens() )
+    {
+      boolean isNumber = true;
+      _String = _St.nextToken();   
+      try 
+      {
+        _Value = Float.parseFloat( _String );
+        _RandomStack.push( new NumberNode( _Value ) );
+        news += "@"+ _String;           
+      }
+      
+      catch (NumberFormatException e) 
+      {
+        isNumber = false;         
+      }
+      
+      if (!isNumber ) 
+      {
+        
+        if( _Operator.contains( _String ) ) 
+        {
+          
+          if( _String.equals( "(" ) )
+          {
+            _OperatorStack.push( _String );
+          }
+          
+          else if ( _String.equals( ")" ) )
+          {
+            while( _OperatorStack.peek() != "(" ) 
+            {
+              pushOpNode( _OperatorStack.pop() ); 
+            }
+            
+            _OperatorStack.pop();
+          }
+          
+          else
+          {
+            while( !_OperatorStack.empty() && prec( _OperatorStack.peek() ) >= prec( _String ) )
+            {
+              if( _OperatorStack.size() > _RandomStack.size() - 1)
+              {
+                System.err.println( "ERROR: Too Much operators" );
+                break;
+              }
+              
+              if( _OperatorStack.size() == _RandomStack.size() )
+              {
+                System.err.println( "ERROR: lack for one oprand" );
+                break;
+              }
+              
+              if( _OperatorStack.size() < _RandomStack.size() - 1 )
+              {
+                System.err.println( "ERROR: Too Much Operands" );
+                break;
+              }
+              
+              else
+                pushOpNode( _OperatorStack.pop() );
+            }
+            
+            _OperatorStack.push( _String ); 
+          }
+          
+          news += "<" + _String + ">";
+        }
+        
+        else
+        {
+          if( Character.isJavaIdentifierStart( _String.charAt( 0 ) ) == false )
+          {
+            news += " Not A LEGAL TOKEN !!! TRY AGAIN";
+            break;
+          }
+          
+          else 
+          {
+            for( int i = 1; i < line.length(); i++ )
+            {
+              if( !Character.isJavaIdentifierPart( line.charAt( i ) ) )
+              {
+                break;
+              }
+            }
+          }
+          
+          _RandomStack.push( new VariableNode( _String , _SymbolTable ) );
+          news += "@"+ _String; 
+        }
+      }
+      if( _St.hasMoreTokens() )
+          
+      {
+        news += ", ";
+      }
+    }
+    
+    while( !_OperatorStack.empty() )
+    {
+      if( _OperatorStack.size() == 1 && _RandomStack.size() == 1 )
+      {
+        System.err.println( "ERROR: lack for one oprand" );
+        break;
+      }
+      
+      else if( _OperatorStack.size() == 0 && _RandomStack.size() == 2 )
+      {
+        System.err.println( "ERROR: lack for one operator" );
+        break;
+      }
+      
+      else if( _OperatorStack.size() > _RandomStack.size() - 1)
+      {
+        System.err.println( "ERROR: Too Much operators" );
+        break;
+      }
+      
+      else if( _OperatorStack.size() == _RandomStack.size() )
+      {
+        System.err.println( "ERROR: lack for one oprand" );
+        break;
+      }
+      
+      else if( _OperatorStack.size() < _RandomStack.size() - 1 )
+      {
+        System.err.println( "ERROR: Too Much Operands" );
+        break;
+      }
+      
+      else
+        pushOpNode( _OperatorStack.pop() );
+    }
+    
+    _TreeRoot = _RandomStack.pop();
+    float results = _TreeRoot.eval();
+    System.out.println( "The Result of the current Tree is:  " + results );
+    System.out.println( "**************************************************************** Everything from here is Expression of the Tree **************************************************************** " );
+    printTree( _TreeRoot, 0 );
+    
+    return news;
+    
+  
+  }
+  
+  private void pushOpNode( String operator )
+  {
+    
+    TreeNode right = _RandomStack.pop();
+    TreeNode left = _RandomStack.pop();
+    _OperatorNode = new OperatorNode( operator, left, right );
+    _RandomStack.push( _OperatorNode );
+  }
+  
+  private int prec( String operator )
+    
+  {
+    if( operator.equals("*") || operator.equals ("/") || operator.equals( "%" ))
+      return 3; 
+    else if( operator.equals("+") || operator.equals("-") )
+      return 2;
+    else
+      return 1;
+    
+  }
+   //--------------------- interactive -----------------------------
+   /**
+    * Use a file chooser to get a file name interactively, then 
+    * go into a loop prompting for expressions to be entered one
+    * at a time.
+    */
+   public void interactive()
+   {
+      JFileChooser fChooser = new JFileChooser( "." );
+      fChooser.setFileFilter( new TextFilter() );
+      int choice = fChooser.showDialog( null, "Pick a file of expressions" );
+      if ( choice == JFileChooser.APPROVE_OPTION )
+      {
+         File file = fChooser.getSelectedFile();
+         if ( file != null )
+            processFile( file.getName() );
+      }
+      
+      String prompt = "Enter an arithmetic expression: ";
+      String expr = JOptionPane.showInputDialog( null, prompt );
+      while ( expr != null && expr.length() != 0 )
+      {
+         String result = processLine( expr );
+         JOptionPane.showMessageDialog( null, expr + "\n" + result );
+         expr = JOptionPane.showInputDialog( null, prompt );
+      }
+   }
+
+   //+++++++++++++++++++++++++ inner class +++++++++++++++++++++++++++++++
+   //---------------------------- TextFilter -----------------------------
+   /**
+    * This class is used with FileChooser to limit the choice of files
+    * to those that end in *.txt
+    */
+   public class TextFilter extends javax.swing.filechooser.FileFilter
+   {
+      public boolean accept( File f ) 
+      {
+         if ( f.isDirectory() || f.getName().matches( ".*txt" ) )
+            return true;
+         return false;
+      }
+      public String getDescription()
+      {
+         return "*.txt files";
+      }
+   }
+   //--------------------- main -----------------------------------------
+   public static void main( String[] args )
+   {
+      Interpreter app = new Interpreter( args );
+   }
+}

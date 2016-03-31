@@ -1,0 +1,10 @@
+# Test assignment
+@print off
+a = 1
+b = a + 1
+c = a + b
+@print
+d = 2 * c - b
+@print on
+a = d * 2 - 3 * a
+b = b * b + c - 1
